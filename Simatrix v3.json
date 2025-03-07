@@ -1,0 +1,6 @@
+{
+    "words": [
+        { "id": "čas", "label": "čas", "title": "idő", "type": "noun", "color": "#ff6666" },
+        { "id": "glava", "label": "glava", "title": "fej", "type": "noun", "color": "#66ccff" }
+    ]
+}
