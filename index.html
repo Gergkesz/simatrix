@@ -1,55 +1,274 @@
 <!DOCTYPE html>
 <html lang="hu">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simatrix</title>
-    <link rel="stylesheet" href="styles.css">
-    <script defer src="script.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simatrix</title>
+  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background: url('https://wallpapercave.com/wp/wp1982057.jpg') no-repeat center center fixed;
+      background-size: cover;
+      color: white;
+      font-family: 'Montserrat', sans-serif;
+      text-align: center;
+    }
+    #network {
+      width: 100vw;
+      height: 70vh;
+      border: 1px solid white;
+    }
+    table {
+      margin: 20px auto;
+      border-collapse: collapse;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+    }
+    th, td {
+      border: 1px solid white;
+      padding: 8px;
+    }
+    /* Speciális karakterek gombjai az "Új szó" mező alatt */
+    #specialCharacters {
+      margin-top: 10px;
+    }
+    #specialCharacters button {
+      font-size: 18px;
+      margin: 5px;
+      padding: 5px 10px;
+      border: none;
+      background: #444;
+      color: white;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    #specialCharacters button:hover {
+      background: #666;
+    }
+  </style>
 </head>
 <body>
-    <h1>Simatrix</h1>
-    <div>
-        <label for="newWord">Új szó:</label>
-        <input type="text" id="newWord">
-        <button onclick="addWord()">Hozzáadás</button>
-    </div>
-    <div>
-        <label for="colorPicker">Színválasztás:</label>
-        <input type="color" id="colorPicker">
-    </div>
-    <div id="wordContainer"></div>
-    <script>
-        let words = [];
-        
-        async function loadWords() {
-            const response = await fetch('Words.json');
-            words = await response.json();
-            displayWords();
+  <h1>Simatrix</h1>
+  <input type="text" id="searchWord" placeholder="Keresés" oninput="searchWord()">
+  <br>
+  <input type="text" id="newWord" placeholder="Új szó">
+  <div id="specialCharacters">
+    <button onclick="insertChar('č')">č</button>
+    <button onclick="insertChar('š')">š</button>
+    <button onclick="insertChar('ž')">ž</button>
+  </div>
+  <br>
+  <input type="text" id="relatedWords" placeholder="Kapcsolódó szavak vesszővel">
+  <input type="text" id="wordMeaning" placeholder="Jelentés">
+  <select id="wordType">
+    <option value="noun">Főnév</option>
+    <option value="verb">Ige</option>
+    <option value="adjective">Melléknév</option>
+    <option value="adverb">Határozószó</option>
+  </select>
+  <!-- Színválasztó a szóburókhoz -->
+  <input type="color" id="nodeColor" value="#ffffff">
+  <br>
+  <button onclick="addWord()">Hozzáadás</button>
+  <button onclick="editNode()">Szerkesztés</button>
+  <button onclick="saveData()">Mentés</button>
+  <button onclick="deleteWord()">Törlés</button>
+  <div id="network"></div>
+  <div id="conjugationTable"></div>
+  
+  <!-- SoundCloud embed -->
+  <iframe width="100%" height="166" scrolling="no" frameborder="no" allow="autoplay" src="https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com/tracks/1269763501&color=%2364745c&auto_play=true&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true"></iframe>
+  <div style="font-size: 10px; color: #cccccc; line-break: anywhere; word-break: normal; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-family: Interstate,Lucida Grande,Lucida Sans Unicode,Lucida Sans,Garuda,Verdana,Tahoma,sans-serif; font-weight: 100;">
+    <a href="https://soundcloud.com/4ambreaks" title="4AM Breaks" target="_blank" style="color: #cccccc; text-decoration: none;">4AM Breaks</a> · 
+    <a href="https://soundcloud.com/4ambreaks/modern-ambient-jungle-mix-3-intelligent-dnb" title="Modern Ambient Jungle Mix [3] (Intelligent DnB)" target="_blank" style="color: #cccccc; text-decoration: none;">Modern Ambient Jungle Mix [3] (Intelligent DnB)</a>
+  </div>
+  
+  <script>
+    // Beszúró függvény a speciális karakterekhez az "Új szó" input mezőbe.
+    function insertChar(char) {
+      let input = document.getElementById("newWord");
+      let start = input.selectionStart;
+      let end = input.selectionEnd;
+      let text = input.value;
+      input.value = text.substring(0, start) + char + text.substring(end);
+      input.focus();
+      input.setSelectionRange(start + 1, start + 1);
+    }
+    
+    // Nodes és edges inicializálása a localStorage-ből vagy üres adatokkal.
+    let nodes = new vis.DataSet(JSON.parse(localStorage.getItem("nodes")) || []);
+    let edges = new vis.DataSet(JSON.parse(localStorage.getItem("edges")) || []);
+    let container = document.getElementById("network");
+    let data = { nodes: nodes, edges: edges };
+    let options = { physics: { enabled: true } };
+    let network = new vis.Network(container, data, options);
+    
+    // Conjugations: tárolja a szófajokat és ragozási adatokat.
+    let conjugations = JSON.parse(localStorage.getItem("conjugations")) || {};
+    
+    // Új szó hozzáadása.
+    function addWord() {
+      let newWord = document.getElementById("newWord").value.trim();
+      let relatedWords = document.getElementById("relatedWords").value.trim().split(",").map(w => w.trim()).filter(w => w !== "");
+      let wordMeaning = document.getElementById("wordMeaning").value.trim();
+      let wordType = document.getElementById("wordType").value;
+      let nodeColor = document.getElementById("nodeColor").value;
+      
+      if (newWord === "") {
+        alert("Adj meg egy szót!");
+        return;
+      }
+      
+      // Új szó hozzáadása, ha még nem létezik, vagy frissítése ha már létezik.
+      if (!nodes.get(newWord)) {
+        nodes.add({ id: newWord, label: newWord, title: wordMeaning, color: { background: nodeColor } });
+      } else {
+        nodes.update({ id: newWord, label: newWord, title: wordMeaning, color: { background: nodeColor } });
+      }
+      
+      // Kapcsolódó szavak és élek hozzáadása.
+      relatedWords.forEach(related => {
+        if (related !== "" && !nodes.get(related)) {
+          nodes.add({ id: related, label: related, color: { background: "#ffffff" } });
         }
-        
-        function displayWords() {
-            const container = document.getElementById('wordContainer');
-            container.innerHTML = '';
-            words.words.forEach(word => {
-                const div = document.createElement('div');
-                div.textContent = word.label;
-                div.style.backgroundColor = word.color;
-                container.appendChild(div);
-            });
+        // Ellenőrizzük, hogy az él még nem létezik.
+        let exists = edges.get({ filter: function(edge) { return edge.from === newWord && edge.to === related; } });
+        if (exists.length === 0) {
+          edges.add({ from: newWord, to: related });
         }
-        
-        function addWord() {
-            const input = document.getElementById('newWord');
-            const color = document.getElementById('colorPicker').value;
-            if (input.value.trim() !== '') {
-                words.words.push({ id: input.value, label: input.value, title: '', type: 'noun', color: color });
-                displayWords();
-                input.value = '';
-            }
-        }
-        
-        loadWords();
-    </script>
+      });
+      
+      // Inicializáljuk a ragozás adatot az új szóhoz.
+      conjugations[newWord] = { type: wordType, forms: {} };
+      saveData();
+    }
+    
+    // Szerkesztés: a kiválasztott csomópont adatainak frissítése.
+    function editNode() {
+      let selectedNodes = network.getSelectedNodes();
+      if (selectedNodes.length === 0) {
+        alert("Válassz ki egy szót a szerkesztéshez!");
+        return;
+      }
+      let nodeId = selectedNodes[0];
+      let newLabel = document.getElementById("newWord").value.trim();
+      let newMeaning = document.getElementById("wordMeaning").value.trim();
+      let newColor = document.getElementById("nodeColor").value;
+      if (newLabel === "") {
+        alert("Adj meg egy új szót!");
+        return;
+      }
+      nodes.update({ id: nodeId, label: newLabel, title: newMeaning, color: { background: newColor } });
+      saveData();
+    }
+    
+    // Adatok mentése a localStorage-be.
+    function saveData() {
+      localStorage.setItem("nodes", JSON.stringify(nodes.get()));
+      localStorage.setItem("edges", JSON.stringify(edges.get()));
+      localStorage.setItem("conjugations", JSON.stringify(conjugations));
+    }
+    
+    // Törlés: a kiválasztott csomópont(ok) törlése.
+    function deleteWord() {
+      let selectedNodes = network.getSelectedNodes();
+      if (selectedNodes.length === 0) {
+        alert("Válassz ki egy szót a törléshez!");
+        return;
+      }
+      selectedNodes.forEach(nodeId => {
+        nodes.remove(nodeId);
+        edges.remove(edges.get({ filter: edge => edge.from === nodeId || edge.to === nodeId }));
+        delete conjugations[nodeId];
+      });
+      saveData();
+      document.getElementById("conjugationTable").innerHTML = "";
+    }
+    
+    // Segédfüggvény: létrehozza a szerkeszthető cellákat a főnévi ragozáshoz.
+    function createEditableCells(word, number, storedData) {
+      let cases = ["nominative", "genitive", "dative", "accusative", "locative", "instrumental"];
+      return cases.map(c => `<td contenteditable="true" oninput="saveConjugation('${word}', '${number}', '${c}', this.innerText)">${storedData?.[number]?.[c] || ""}</td>`).join("");
+    }
+    
+    // A ragozási táblázat megjelenítése a kiválasztott szóhoz.
+    function displayConjugation(word) {
+      let tableDiv = document.getElementById("conjugationTable");
+      let wordType = conjugations[word]?.type || "noun";
+      let storedData = conjugations[word]?.forms || {};
+      let tableContent = "";
+      
+      if (wordType === "noun") {
+        tableContent = `
+          <table>
+            <tr>
+              <th></th><th>Nominatív</th><th>Genitív</th><th>Datív</th><th>Akuzatív</th><th>Lokatív</th><th>Instrumentál</th>
+            </tr>
+            <tr>
+              <td>Egyszám</td>
+              ${createEditableCells(word, "singular", storedData)}
+            </tr>
+            <tr>
+              <td>Többesszám</td>
+              ${createEditableCells(word, "plural", storedData)}
+            </tr>
+          </table>
+        `;
+      } else if (wordType === "verb") {
+        tableContent = `
+          <table>
+            <tr>
+              <th>Jelen</th><th>Múlt</th><th>Jövő</th>
+            </tr>
+            <tr>
+              <td contenteditable="true" oninput="saveConjugation('${word}', 'verb', 'present', this.innerText)">${storedData.present || ""}</td>
+              <td contenteditable="true" oninput="saveConjugation('${word}', 'verb', 'past', this.innerText)">${storedData.past || ""}</td>
+              <td contenteditable="true" oninput="saveConjugation('${word}', 'verb', 'future', this.innerText)">${storedData.future || ""}</td>
+            </tr>
+          </table>
+        `;
+      } else if (wordType === "adjective") {
+        tableContent = `
+          <table>
+            <tr>
+              <th>Pozitív</th><th>Középfok</th><th>Felsőfok</th>
+            </tr>
+            <tr>
+              <td contenteditable="true" oninput="saveConjugation('${word}', 'adjective', 'positive', this.innerText)">${storedData.positive || ""}</td>
+              <td contenteditable="true" oninput="saveConjugation('${word}', 'adjective', 'comparative', this.innerText)">${storedData.comparative || ""}</td>
+              <td contenteditable="true" oninput="saveConjugation('${word}', 'adjective', 'superlative', this.innerText)">${storedData.superlative || ""}</td>
+            </tr>
+          </table>
+        `;
+      } else if (wordType === "adverb") {
+        tableContent = `<p>Határozószavak esetében nincs ragozás.</p>`;
+      }
+      tableDiv.innerHTML = tableContent;
+    }
+    
+    // A conjugation adatok mentése és localStorage frissítése.
+    function saveConjugation(word, category, caseType, value) {
+      if (!conjugations[word]) conjugations[word] = { type: "noun", forms: {} };
+      if (!conjugations[word].forms[category]) conjugations[word].forms[category] = {};
+      conjugations[word].forms[category][caseType] = value;
+      saveData();
+    }
+    
+    // Amikor egy csomópontra kattintanak, megjelenik a ragozási táblázat.
+    network.on("click", function(params) {
+      if (params.nodes.length > 0) {
+        displayConjugation(params.nodes[0]);
+      }
+    });
+    
+    // Kereső funkció: a keresési érték alapján kiemeli a megfelelő csomópontokat.
+    function searchWord() {
+      let searchValue = document.getElementById("searchWord").value.toLowerCase();
+      nodes.forEach(node => {
+        nodes.update({ id: node.id, color: node.label.toLowerCase().includes(searchValue) ? "yellow" : "white" });
+      });
+    }
+  </script>
 </body>
 </html>
