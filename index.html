@@ -8,6 +8,8 @@
         body {
             font-family: "Montserrat", sans-serif;
             text-align: center;
+            background-color: black;
+            color: white;
         }
         .word {
             display: inline-block;
@@ -19,24 +21,42 @@
         .color-picker {
             display: none;
         }
+        .color-options {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 10px;
+        }
+        .color-option {
+            width: 30px;
+            height: 30px;
+            margin: 5px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid white;
+        }
     </style>
 </head>
 <body>
     <h1>Simatrix</h1>
     <input type="text" id="newWord" placeholder="Új szó">
-    <input type="color" id="wordColor" value="#ff6666">
+    <div id="colorOptions" class="color-options"></div>
     <button onclick="addWord()">Hozzáadás</button>
     <div id="wordContainer"></div>
     
     <script>
-        document.addEventListener("DOMContentLoaded", loadWords);
+        document.addEventListener("DOMContentLoaded", () => {
+            loadWords();
+            createColorOptions();
+        });
+
+        let selectedColor = "#ff6666";
 
         function addWord() {
             const wordInput = document.getElementById("newWord");
-            const colorInput = document.getElementById("wordColor");
             const word = wordInput.value.trim();
             if (!word) return;
-            createWordElement(word, colorInput.value);
+            createWordElement(word, selectedColor);
             saveWords();
             wordInput.value = "";
         }
@@ -53,11 +73,10 @@
         }
 
         function editWord(element) {
-            const newColor = prompt("Válassz új színt (hex kód):", element.style.backgroundColor);
-            if (newColor) {
-                element.style.backgroundColor = newColor;
-                saveWords();
-            }
+            selectedColor = element.style.backgroundColor;
+            highlightSelectedColor(selectedColor);
+            element.style.backgroundColor = selectedColor;
+            saveWords();
         }
 
         function saveWords() {
@@ -71,6 +90,27 @@
         function loadWords() {
             const savedWords = JSON.parse(localStorage.getItem("words")) || [];
             savedWords.forEach(word => createWordElement(word.text, word.color));
+        }
+
+        function createColorOptions() {
+            const colorContainer = document.getElementById("colorOptions");
+            const colors = ["#ff6666", "#66ff66", "#6666ff", "#ffff66", "#66ffff", "#ff66ff", "#ff9933", "#99ff33", "#33ff99", "#3399ff", "#9933ff", "#ff3399", "#cccccc", "#ffcc00", "#ccff00", "#00ffcc", "#00ccff", "#cc00ff", "#ff0066", "#ff3300", "#ff6600", "#ff9900", "#ffcc00", "#33cc33", "#3366ff", "#6633ff", "#cc33ff", "#ff33cc", "#ff3366", "#ff3333", "#cc6666", "#ff9966", "#ffcc99", "#ffff99", "#ccff99", "#99ff99", "#99ffcc", "#99ffff", "#99ccff", "#9999ff", "#cc99ff", "#ff99ff", "#ff99cc", "#ff9999", "#ff6666", "#ff3300", "#cc3300", "#993300", "#663300"];
+            colors.forEach(color => {
+                const colorDiv = document.createElement("div");
+                colorDiv.classList.add("color-option");
+                colorDiv.style.backgroundColor = color;
+                colorDiv.onclick = function () {
+                    selectedColor = color;
+                    highlightSelectedColor(color);
+                };
+                colorContainer.appendChild(colorDiv);
+            });
+        }
+
+        function highlightSelectedColor(color) {
+            document.querySelectorAll(".color-option").forEach(option => {
+                option.style.border = option.style.backgroundColor === color ? "3px solid white" : "2px solid white";
+            });
         }
     </script>
 </body>
