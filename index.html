@@ -1,117 +1,277 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="hu">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simatrix</title>
-    <style>
-        body {
-            font-family: "Montserrat", sans-serif;
-            text-align: center;
-            background-color: black;
-            color: white;
-        }
-        .word {
-            display: inline-block;
-            margin: 10px;
-            padding: 10px;
-            border-radius: 20px;
-            cursor: pointer;
-        }
-        .color-picker {
-            display: none;
-        }
-        .color-options {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            margin-top: 10px;
-        }
-        .color-option {
-            width: 30px;
-            height: 30px;
-            margin: 5px;
-            border-radius: 50%;
-            cursor: pointer;
-            border: 2px solid white;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simatrix</title>
+  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background: url('https://wallpapercave.com/wp/wp1982057.jpg') no-repeat center center fixed;
+      background-size: cover;
+      color: white;
+      font-family: 'Montserrat', sans-serif;
+      text-align: center;
+    }
+    #network {
+      width: 100vw;
+      height: 70vh;
+      border: 1px solid white;
+    }
+    table {
+      margin: 20px auto;
+      border-collapse: collapse;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+    }
+    th, td {
+      border: 1px solid white;
+      padding: 8px;
+    }
+    /* Speciális karakterek gombjai az "Új szó" mező alatt */
+    #specialCharacters {
+      margin-top: 10px;
+    }
+    #specialCharacters button {
+      font-size: 18px;
+      margin: 5px;
+      padding: 5px 10px;
+      border: none;
+      background: #444;
+      color: white;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    #specialCharacters button:hover {
+      background: #666;
+    }
+  </style>
 </head>
 <body>
-    <h1>Simatrix</h1>
-    <input type="text" id="newWord" placeholder="Új szó">
-    <div id="colorOptions" class="color-options"></div>
-    <button onclick="addWord()">Hozzáadás</button>
-    <div id="wordContainer"></div>
+  <h1>Simatrix</h1>
+  <input type="text" id="searchWord" placeholder="Keresés" oninput="searchWord()">
+  <br>
+  <input type="text" id="newWord" placeholder="Új szó">
+  <div id="specialCharacters">
+    <button onclick="insertChar('č')">č</button>
+    <button onclick="insertChar('š')">š</button>
+    <button onclick="insertChar('ž')">ž</button>
+  </div>
+  <br>
+  <input type="text" id="relatedWords" placeholder="Kapcsolódó szavak vesszővel">
+  <input type="text" id="wordMeaning" placeholder="Jelentés">
+  <select id="wordType">
+    <option value="noun">Főnév</option>
+    <option value="verb">Ige</option>
+    <option value="adjective">Melléknév</option>
+    <option value="adverb">Határozószó</option>
+  </select>
+  <!-- Színválasztó a szóburókhoz -->
+  <input type="color" id="nodeColor" value="#ffffff">
+  <br>
+  <button onclick="addWord()">Hozzáadás</button>
+  <button onclick="editNode()">Szerkesztés</button>
+  <button onclick="saveData()">Mentés</button>
+  <button onclick="deleteWord()">Törlés</button>
+  <div id="network"></div>
+  <div id="conjugationTable"></div>
+  
+  <!-- SoundCloud embed -->
+  <iframe width="100%" height="166" scrolling="no" frameborder="no" allow="autoplay" src="https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com/tracks/1269763501&color=%2364745c&auto_play=true&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true"></iframe>
+  <div style="font-size: 10px; color: #cccccc; line-break: anywhere; word-break: normal; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-family: Interstate,Lucida Grande,Lucida Sans Unicode,Lucida Sans,Garuda,Verdana,Tahoma,sans-serif; font-weight: 100;">
+    <a href="https://soundcloud.com/4ambreaks" title="4AM Breaks" target="_blank" style="color: #cccccc; text-decoration: none;">4AM Breaks</a> · 
+    <a href="https://soundcloud.com/4ambreaks/modern-ambient-jungle-mix-3-intelligent-dnb" title="Modern Ambient Jungle Mix [3] (Intelligent DnB)" target="_blank" style="color: #cccccc; text-decoration: none;">Modern Ambient Jungle Mix [3] (Intelligent DnB)</a>
+  </div>
+  
+  <script>
+    // Function to insert special character into the "newWord" input at the cursor position.
+    function insertChar(char) {
+      let input = document.getElementById("newWord");
+      let start = input.selectionStart;
+      let end = input.selectionEnd;
+      let text = input.value;
+      input.value = text.substring(0, start) + char + text.substring(end);
+      input.focus();
+      input.setSelectionRange(start + 1, start + 1);
+    }
     
-    <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            loadWords();
-            createColorOptions();
-        });
-
-        let selectedColor = "#ff6666";
-
-        function addWord() {
-            const wordInput = document.getElementById("newWord");
-            const word = wordInput.value.trim();
-            if (!word) return;
-            createWordElement(word, selectedColor);
-            saveWords();
-            wordInput.value = "";
+    // Initialize nodes and edges from localStorage or empty arrays.
+    let nodes = new vis.DataSet(JSON.parse(localStorage.getItem("nodes")) || []);
+    let edges = new vis.DataSet(JSON.parse(localStorage.getItem("edges")) || []);
+    let container = document.getElementById("network");
+    let data = { nodes: nodes, edges: edges };
+    let options = { physics: { enabled: true } };
+    let network = new vis.Network(container, data, options);
+    
+    // Load conjugations from localStorage or as an empty object.
+    let conjugations = JSON.parse(localStorage.getItem("conjugations")) || {};
+    
+    // Function to add a new word.
+    function addWord() {
+      let newWord = document.getElementById("newWord").value.trim();
+      let relatedWords = document.getElementById("relatedWords").value.trim().split(",").map(w => w.trim()).filter(w => w !== "");
+      let wordMeaning = document.getElementById("wordMeaning").value.trim();
+      let wordType = document.getElementById("wordType").value;
+      let nodeColor = document.getElementById("nodeColor").value;
+      
+      if (newWord === "") {
+        alert("Adj meg egy szót!");
+        return;
+      }
+      
+      // Add the new word if it doesn't exist.
+      if (!nodes.get(newWord)) {
+        nodes.add({ id: newWord, label: newWord, title: wordMeaning, color: { background: nodeColor } });
+      } else {
+        // Update the node if it already exists.
+        nodes.update({ id: newWord, label: newWord, title: wordMeaning, color: { background: nodeColor } });
+      }
+      
+      // Add related words and create edges.
+      relatedWords.forEach(related => {
+        if (related !== "") {
+          if (!nodes.get(related)) {
+            nodes.add({ id: related, label: related, color: { background: "#ffffff" } });
+          }
+          // Check if an edge already exists from newWord to related.
+          let exists = edges.get({ filter: function(edge) { return edge.from === newWord && edge.to === related; } });
+          if (exists.length === 0) {
+            edges.add({ from: newWord, to: related });
+          }
         }
-
-        function createWordElement(word, color) {
-            const wordElement = document.createElement("div");
-            wordElement.classList.add("word");
-            wordElement.textContent = word;
-            wordElement.style.backgroundColor = color;
-            wordElement.onclick = function () {
-                editWord(wordElement);
-            };
-            document.getElementById("wordContainer").appendChild(wordElement);
-        }
-
-        function editWord(element) {
-            selectedColor = element.style.backgroundColor;
-            highlightSelectedColor(selectedColor);
-            element.style.backgroundColor = selectedColor;
-            saveWords();
-        }
-
-        function saveWords() {
-            const words = Array.from(document.querySelectorAll(".word")).map(word => ({
-                text: word.textContent,
-                color: word.style.backgroundColor
-            }));
-            localStorage.setItem("words", JSON.stringify(words));
-        }
-
-        function loadWords() {
-            const savedWords = JSON.parse(localStorage.getItem("words")) || [];
-            savedWords.forEach(word => createWordElement(word.text, word.color));
-        }
-
-        function createColorOptions() {
-            const colorContainer = document.getElementById("colorOptions");
-            const colors = ["#ff6666", "#66ff66", "#6666ff", "#ffff66", "#66ffff", "#ff66ff", "#ff9933", "#99ff33", "#33ff99", "#3399ff", "#9933ff", "#ff3399", "#cccccc", "#ffcc00", "#ccff00", "#00ffcc", "#00ccff", "#cc00ff", "#ff0066", "#ff3300", "#ff6600", "#ff9900", "#ffcc00", "#33cc33", "#3366ff", "#6633ff", "#cc33ff", "#ff33cc", "#ff3366", "#ff3333", "#cc6666", "#ff9966", "#ffcc99", "#ffff99", "#ccff99", "#99ff99", "#99ffcc", "#99ffff", "#99ccff", "#9999ff", "#cc99ff", "#ff99ff", "#ff99cc", "#ff9999", "#ff6666", "#ff3300", "#cc3300", "#993300", "#663300"];
-            colors.forEach(color => {
-                const colorDiv = document.createElement("div");
-                colorDiv.classList.add("color-option");
-                colorDiv.style.backgroundColor = color;
-                colorDiv.onclick = function () {
-                    selectedColor = color;
-                    highlightSelectedColor(color);
-                };
-                colorContainer.appendChild(colorDiv);
-            });
-        }
-
-        function highlightSelectedColor(color) {
-            document.querySelectorAll(".color-option").forEach(option => {
-                option.style.border = option.style.backgroundColor === color ? "3px solid white" : "2px solid white";
-            });
-        }
-    </script>
+      });
+      
+      // Initialize conjugation data for the new word.
+      conjugations[newWord] = { type: wordType, forms: {} };
+      saveData();
+    }
+    
+    // Function to edit the selected node.
+    function editNode() {
+      let selectedNodes = network.getSelectedNodes();
+      if (selectedNodes.length === 0) {
+        alert("Válassz ki egy szót a szerkesztéshez!");
+        return;
+      }
+      let nodeId = selectedNodes[0];
+      let newLabel = document.getElementById("newWord").value.trim();
+      let newMeaning = document.getElementById("wordMeaning").value.trim();
+      let newColor = document.getElementById("nodeColor").value;
+      if (newLabel === "") {
+        alert("Adj meg egy új szót!");
+        return;
+      }
+      nodes.update({ id: nodeId, label: newLabel, title: newMeaning, color: { background: newColor } });
+      saveData();
+    }
+    
+    // Function to save data to localStorage.
+    function saveData() {
+      localStorage.setItem("nodes", JSON.stringify(nodes.get()));
+      localStorage.setItem("edges", JSON.stringify(edges.get()));
+      localStorage.setItem("conjugations", JSON.stringify(conjugations));
+    }
+    
+    // Function to delete selected nodes.
+    function deleteWord() {
+      let selectedNodes = network.getSelectedNodes();
+      if (selectedNodes.length === 0) {
+        alert("Válassz ki egy szót a törléshez!");
+        return;
+      }
+      selectedNodes.forEach(nodeId => {
+        nodes.remove(nodeId);
+        edges.remove(edges.get({ filter: edge => edge.from === nodeId || edge.to === nodeId }));
+        delete conjugations[nodeId];
+      });
+      saveData();
+      document.getElementById("conjugationTable").innerHTML = "";
+    }
+    
+    // Helper function to create editable cells for noun conjugation.
+    function createEditableCells(word, number, storedData) {
+      let cases = ["nominative", "genitive", "dative", "accusative", "locative", "instrumental"];
+      return cases.map(c => `<td contenteditable="true" oninput="saveConjugation('${word}', '${number}', '${c}', this.innerText)">${storedData?.[number]?.[c] || ""}</td>`).join("");
+    }
+    
+    // Function to display the conjugation table for a word.
+    function displayConjugation(word) {
+      let tableDiv = document.getElementById("conjugationTable");
+      let wordType = conjugations[word]?.type || "noun";
+      let storedData = conjugations[word]?.forms || {};
+      let tableContent = "";
+      
+      if (wordType === "noun") {
+        tableContent = `
+          <table>
+            <tr>
+              <th></th><th>Nominatív</th><th>Genitív</th><th>Datív</th><th>Akuzatív</th><th>Lokatív</th><th>Instrumentál</th>
+            </tr>
+            <tr>
+              <td>Egyszám</td>
+              ${createEditableCells(word, "singular", storedData)}
+            </tr>
+            <tr>
+              <td>Többesszám</td>
+              ${createEditableCells(word, "plural", storedData)}
+            </tr>
+          </table>
+        `;
+      } else if (wordType === "verb") {
+        tableContent = `
+          <table>
+            <tr>
+              <th>Jelen</th><th>Múlt</th><th>Jövő</th>
+            </tr>
+            <tr>
+              <td contenteditable="true" oninput="saveConjugation('${word}', 'verb', 'present', this.innerText)">${storedData.present || ""}</td>
+              <td contenteditable="true" oninput="saveConjugation('${word}', 'verb', 'past', this.innerText)">${storedData.past || ""}</td>
+              <td contenteditable="true" oninput="saveConjugation('${word}', 'verb', 'future', this.innerText)">${storedData.future || ""}</td>
+            </tr>
+          </table>
+        `;
+      } else if (wordType === "adjective") {
+        tableContent = `
+          <table>
+            <tr>
+              <th>Pozitív</th><th>Középfok</th><th>Felsőfok</th>
+            </tr>
+            <tr>
+              <td contenteditable="true" oninput="saveConjugation('${word}', 'adjective', 'positive', this.innerText)">${storedData.positive || ""}</td>
+              <td contenteditable="true" oninput="saveConjugation('${word}', 'adjective', 'comparative', this.innerText)">${storedData.comparative || ""}</td>
+              <td contenteditable="true" oninput="saveConjugation('${word}', 'adjective', 'superlative', this.innerText)">${storedData.superlative || ""}</td>
+            </tr>
+          </table>
+        `;
+      } else if (wordType === "adverb") {
+        tableContent = `<p>Határozószavak esetében nincs ragozás.</p>`;
+      }
+      tableDiv.innerHTML = tableContent;
+    }
+    
+    // Function to save conjugation data and update localStorage.
+    function saveConjugation(word, category, caseType, value) {
+      if (!conjugations[word]) conjugations[word] = { type: "noun", forms: {} };
+      if (!conjugations[word].forms[category]) conjugations[word].forms[category] = {};
+      conjugations[word].forms[category][caseType] = value;
+      saveData();
+    }
+    
+    // When a node is clicked, display its conjugation table.
+    network.on("click", function(params) {
+      if (params.nodes.length > 0) {
+        displayConjugation(params.nodes[0]);
+      }
+    });
+    
+    // Search function: highlights nodes that match the search query.
+    function searchWord() {
+      let searchValue = document.getElementById("searchWord").value.toLowerCase();
+      nodes.forEach(node => {
+        nodes.update({ id: node.id, color: node.label.toLowerCase().includes(searchValue) ? "yellow" : "white" });
+      });
+    }
+  </script>
 </body>
 </html>
